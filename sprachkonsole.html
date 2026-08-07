@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Relaisstation — Sprachkonsole</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #0B0E11;
+    --panel: #12161B;
+    --paper: #E8E6E1;
+    --paper-dim: #8A8D91;
+    --amber: #FF8A3D;
+    --amber-dim: #7A4A28;
+    --teal: #5FA8A0;
+    --steel: #262B31;
+    --red: #E15252;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    height: 100%;
+    margin: 0;
+    background: var(--ink);
+    color: var(--paper);
+    font-family: 'JetBrains Mono', monospace;
+    overflow: hidden;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+  }
+
+  /* ---------- Header ---------- */
+  header {
+    flex: 0 0 auto;
+    padding: 18px 20px 14px;
+    border-bottom: 1px solid var(--steel);
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+
+  .brand {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--paper);
+  }
+  .brand span { color: var(--amber); }
+
+  .status-line {
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    color: var(--paper-dim);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--steel);
+    transition: background 0.3s, box-shadow 0.3s;
+  }
+  .dot.online { background: var(--teal); box-shadow: 0 0 6px var(--teal); }
+  .dot.busy { background: var(--amber); box-shadow: 0 0 6px var(--amber); animation: blink 1s infinite; }
+  .dot.error { background: var(--red); box-shadow: 0 0 6px var(--red); }
+  @keyframes blink { 50% { opacity: 0.3; } }
+
+  /* ---------- Transcript log ---------- */
+  #log {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: 18px 20px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .entry { max-width: 88%; }
+  .entry .meta {
+    font-size: 9.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+  }
+  .entry.user { align-self: flex-end; text-align: right; }
+  .entry.user .meta { color: var(--amber); flex-direction: row-reverse; }
+  .entry.ai .meta { color: var(--teal); }
+  .entry .body {
+    font-size: 14.5px;
+    line-height: 1.55;
+    color: var(--paper);
+    white-space: pre-wrap;
+  }
+  .entry.user .body { color: #F2CBA8; }
+  .entry.system .body { color: var(--paper-dim); font-size: 12px; font-style: italic; }
+  .entry .provider {
+    font-size: 9px;
+    color: var(--steel);
+    border: 1px solid var(--steel);
+    padding: 1px 5px;
+    border-radius: 2px;
+  }
+
+  #log::-webkit-scrollbar { width: 3px; }
+  #log::-webkit-scrollbar-thumb { background: var(--steel); }
+
+  /* ---------- Console / orb area ---------- */
+  .console {
+    flex: 0 0 auto;
+    padding: 8px 20px calc(22px + env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    border-top: 1px solid var(--steel);
+    background: linear-gradient(to bottom, transparent, var(--panel) 40%);
+  }
+
+  .orb-wrap {
+    position: relative;
+    width: 132px; height: 132px;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 1px solid var(--steel);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .ring1 { width: 100%; height: 100%; }
+  .ring2 { width: 78%; height: 78%; }
+
+  .orb-wrap.listening .ring,
+  .orb-wrap.speaking .ring {
+    opacity: 1;
+    border-color: var(--amber-dim);
+    animation: pulse-ring 1.6s ease-out infinite;
+  }
+  .orb-wrap.speaking .ring { border-color: #2E5C57; animation-name: pulse-ring-teal; }
+  .ring2 { animation-delay: 0.3s !important; }
+
+  @keyframes pulse-ring {
+    0% { transform: scale(0.72); opacity: 0.9; }
+    100% { transform: scale(1.25); opacity: 0; }
+  }
+  @keyframes pulse-ring-teal {
+    0% { transform: scale(0.72); opacity: 0.9; }
+    100% { transform: scale(1.25); opacity: 0; }
+  }
+
+  #talkBtn {
+    position: relative;
+    width: 92px; height: 92px;
+    border-radius: 50%;
+    border: none;
+    background: radial-gradient(circle at 35% 30%, #1B2027, #0D1013 70%);
+    box-shadow: 0 0 0 1px var(--steel), inset 0 0 18px rgba(0,0,0,0.6);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: box-shadow 0.25s, transform 0.15s;
+  }
+  #talkBtn:active { transform: scale(0.96); }
+
+  #talkBtn.listening {
+    box-shadow: 0 0 0 1px var(--amber), 0 0 24px 2px rgba(255,138,61,0.45), inset 0 0 18px rgba(0,0,0,0.4);
+  }
+  #talkBtn.speaking {
+    box-shadow: 0 0 0 1px var(--teal), 0 0 24px 2px rgba(95,168,160,0.4), inset 0 0 18px rgba(0,0,0,0.4);
+  }
+  #talkBtn.thinking {
+    box-shadow: 0 0 0 1px var(--amber-dim);
+  }
+
+  #talkBtn svg { width: 30px; height: 30px; stroke: var(--paper); fill: none; stroke-width: 1.6; }
+  #talkBtn.listening svg { stroke: var(--amber); }
+  #talkBtn.speaking svg { stroke: var(--teal); }
+
+  .hint {
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    color: var(--paper-dim);
+    min-height: 14px;
+    text-align: center;
+  }
+
+  .textfallback {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+    max-width: 420px;
+  }
+  #textInput {
+    flex: 1;
+    background: var(--panel);
+    border: 1px solid var(--steel);
+    color: var(--paper);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    padding: 9px 11px;
+    border-radius: 4px;
+    outline: none;
+  }
+  #textInput:focus { border-color: var(--amber-dim); }
+  #sendBtn {
+    background: none;
+    border: 1px solid var(--steel);
+    color: var(--paper-dim);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0 14px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  #sendBtn:active { border-color: var(--amber); color: var(--amber); }
+
+  .setup-banner {
+    padding: 10px 14px;
+    margin: 0 20px 10px;
+    border: 1px solid var(--amber-dim);
+    border-radius: 4px;
+    font-size: 11px;
+    color: #D8A67C;
+    display: none;
+  }
+  .setup-banner.show { display: block; }
+  .setup-banner code { color: var(--amber); }
+
+  #settingsToggle {
+    background: none; border: none; color: var(--steel);
+    font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase;
+    cursor: pointer; padding: 4px 0;
+  }
+  .settings-panel {
+    display: none;
+    gap: 6px;
+    flex-direction: column;
+    width: 100%; max-width: 420px;
+  }
+  .settings-panel.show { display: flex; }
+  .settings-panel input {
+    background: var(--panel); border: 1px solid var(--steel); color: var(--paper-dim);
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 7px 9px; border-radius: 4px; outline: none;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">RELAIS<span>STATION</span></div>
+  <div class="status-line"><span class="dot" id="statusDot"></span><span id="statusText">bereit</span></div>
+</header>
+
+<div class="setup-banner" id="setupBanner">
+  Kein Mikrofonzugriff / Spracherkennung nicht unterstützt. Nutze Chrome auf Android, oder tippe unten Text ein.
+</div>
+
+<div id="log"></div>
+
+<div class="console">
+  <div class="orb-wrap" id="orbWrap">
+    <div class="ring ring1"></div>
+    <div class="ring ring2"></div>
+    <button id="talkBtn" aria-label="Sprechen">
+      <svg id="micIcon" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="2" width="6" height="12" rx="3"/>
+        <path d="M5 10a7 7 0 0 0 14 0"/>
+        <line x1="12" y1="19" x2="12" y2="22"/>
+      </svg>
+    </button>
+  </div>
+  <div class="hint" id="hint">Antippen und sprechen</div>
+
+  <div class="textfallback">
+    <input type="text" id="textInput" placeholder="…oder Text eingeben">
+    <button id="sendBtn">Senden</button>
+  </div>
+
+  <button id="settingsToggle">Einstellungen</button>
+  <div class="settings-panel" id="settingsPanel">
+    <input type="text" id="gatewayUrl" placeholder="Gateway-URL" value="https://p-gateway-1r5v.onrender.com/chat">
+    <input type="text" id="voiceLang" placeholder="Sprache (z.B. de-DE)" value="de-DE">
+  </div>
+</div>
+
+<script>
+  const log = document.getElementById('log');
+  const talkBtn = document.getElementById('talkBtn');
+  const orbWrap = document.getElementById('orbWrap');
+  const hint = document.getElementById('hint');
+  const statusDot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+  const setupBanner = document.getElementById('setupBanner');
+  const textInput = document.getElementById('textInput');
+  const sendBtn = document.getElementById('sendBtn');
+  const settingsToggle = document.getElementById('settingsToggle');
+  const settingsPanel = document.getElementById('settingsPanel');
+  const gatewayUrlInput = document.getElementById('gatewayUrl');
+  const voiceLangInput = document.getElementById('voiceLang');
+
+  let history = [];
+  let isBusy = false;
+
+  settingsToggle.addEventListener('click', () => settingsPanel.classList.toggle('show'));
+
+  function setStatus(state, text) {
+    statusDot.className = 'dot ' + (state || '');
+    statusText.textContent = text;
+  }
+
+  function addEntry(role, text, provider) {
+    const el = document.createElement('div');
+    el.className = 'entry ' + role;
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const label = document.createElement('span');
+    label.textContent = role === 'user' ? 'Du' : role === 'ai' ? 'KI' : 'System';
+    meta.appendChild(label);
+    if (provider) {
+      const p = document.createElement('span');
+      p.className = 'provider';
+      p.textContent = provider;
+      meta.appendChild(p);
+    }
+    const body = document.createElement('div');
+    body.className = 'body';
+    body.textContent = text;
+    el.appendChild(meta);
+    el.appendChild(body);
+    log.appendChild(el);
+    log.scrollTop = log.scrollHeight;
+    return el;
+  }
+
+  // ---------- Speech recognition (STT) ----------
+  const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognition = null;
+  let recognizing = false;
+
+  if (SpeechRecognitionCtor) {
+    recognition = new SpeechRecognitionCtor();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    recognition.onstart = () => {
+      recognizing = true;
+      talkBtn.classList.add('listening');
+      orbWrap.classList.add('listening');
+      setStatus('busy', 'hört zu…');
+      hint.textContent = 'Sprich jetzt';
+    };
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      handleUserInput(transcript);
+    };
+
+    recognition.onerror = (event) => {
+      recognizing = false;
+      talkBtn.classList.remove('listening');
+      orbWrap.classList.remove('listening');
+      setStatus('error', 'Fehler: ' + event.error);
+      hint.textContent = 'Antippen und sprechen';
+      setTimeout(() => setStatus('online', 'bereit'), 2500);
+    };
+
+    recognition.onend = () => {
+      recognizing = false;
+      talkBtn.classList.remove('listening');
+      orbWrap.classList.remove('listening');
+      if (!isBusy) { setStatus('online', 'bereit'); hint.textContent = 'Antippen und sprechen'; }
+    };
+  } else {
+    setupBanner.classList.add('show');
+  }
+
+  talkBtn.addEventListener('click', () => {
+    if (isBusy) return;
+    if (!recognition) { textInput.focus(); return; }
+    if (recognizing) { recognition.stop(); return; }
+    window.speechSynthesis.cancel();
+    recognition.lang = voiceLangInput.value || 'de-DE';
+    try { recognition.start(); } catch (e) { /* already started */ }
+  });
+
+  sendBtn.addEventListener('click', () => {
+    const val = textInput.value.trim();
+    if (val) { handleUserInput(val); textInput.value = ''; }
+  });
+  textInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') sendBtn.click();
+  });
+
+  // ---------- Text-to-speech (TTS) ----------
+  function speak(text) {
+    if (!('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = voiceLangInput.value || 'de-DE';
+    const voices = window.speechSynthesis.getVoices();
+    const deVoice = voices.find(v => v.lang && v.lang.toLowerCase().startsWith('de'));
+    if (deVoice) utter.voice = deVoice;
+    utter.onstart = () => {
+      talkBtn.classList.add('speaking');
+      orbWrap.classList.add('speaking');
+      setStatus('busy', 'spricht…');
+      hint.textContent = 'Antippen zum Unterbrechen';
+    };
+    utter.onend = () => {
+      talkBtn.classList.remove('speaking');
+      orbWrap.classList.remove('speaking');
+      setStatus('online', 'bereit');
+      hint.textContent = 'Antippen und sprechen';
+    };
+    window.speechSynthesis.speak(utter);
+  }
+
+  talkBtn.addEventListener('click', () => {
+    if (window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+    }
+  }, true);
+
+  // ---------- Send to gateway ----------
+  async function handleUserInput(text) {
+    if (!text || isBusy) return;
+    isBusy = true;
+    talkBtn.classList.add('thinking');
+    addEntry('user', text);
+    history.push({ role: 'user', content: text });
+    setStatus('busy', 'sende an Gateway…');
+    hint.textContent = 'Warte auf Antwort — kann bei kaltem Server ~40s dauern';
+
+    const url = gatewayUrlInput.value.trim();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 70000);
+
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text }),
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
+
+      if (!resp.ok) {
+        const errBody = await resp.text();
+        throw new Error('HTTP ' + resp.status + ': ' + errBody.slice(0, 200));
+      }
+
+      const data = await resp.json();
+      const answer = data.text || '(keine Antwort erhalten)';
+      addEntry('ai', answer, data.provider);
+      history.push({ role: 'assistant', content: answer });
+      speak(answer);
+    } catch (err) {
+      const msg = err.name === 'AbortError'
+        ? 'Zeitüberschreitung — Server antwortet nicht (evtl. schläft er noch).'
+        : 'Verbindungsfehler: ' + err.message;
+      addEntry('system', msg);
+      setStatus('error', 'Fehler');
+      setTimeout(() => setStatus('online', 'bereit'), 2500);
+      hint.textContent = 'Antippen und sprechen';
+    } finally {
+      isBusy = false;
+      talkBtn.classList.remove('thinking');
+    }
+  }
+
+  addEntry('system', 'Relaisstation bereit. Antippe das Symbol und sprich, oder tippe unten Text ein.');
+  setStatus('online', 'bereit');
+</script>
+
+</body>
+</html>
